@@ -9,6 +9,7 @@ from oauth2client import client
 from oauth2client import tools
 from oauth2client.file import Storage
 
+import datetime
 
 try:
     import argparse
@@ -19,17 +20,22 @@ except ImportError:
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'config/client_secret.json'
 APPLICATION_NAME = 'Drive API Python Quickstart'
-DEFAUTL_FOLDER = 'files/'
+
     
 class FreeDriveClient():
+    sync_path = 'files/'
+    
+    def set_syncPath(self, path):
+        self.sync_path = path
 
     def get_credentials(self):
         home_dir = os.path.expanduser('~')
         credential_dir = os.path.join(home_dir, '.credentials')
+        
         if not os.path.exists(credential_dir):
             os.makedirs(credential_dir)
-        credential_path = os.path.join(credential_dir,
-                                    'drive-python-quickstart.json')
+
+        credential_path = os.path.join(credential_dir, 'drive-python-quickstart.json')
 
         store = Storage(credential_path)
         credentials = store.get()
@@ -63,7 +69,43 @@ class FreeDriveClient():
         http = credentials.authorize(httplib2.Http())
         service = discovery.build('drive', 'v3', http=http)
 
-        file_metadata = {'name': 'testfile.txt'}
-        media = MediaFileUpload(DEFAUTL_FOLDER + filename, mimetype="text/txt")
+        file_metadata = {'name': filename, 'mimeType' : 'text/plain'}
+        media = MediaFileUpload(self.sync_path + filename, mimetype="text/plain")
         file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        print("File's ID: %s" % file.get('id'))
+        if file:
+            return True
+        else:
+            print("Error uploading file: " + filename)
+            return False
+
+    def sync_file(self, filename):
+        credentials = self.get_credentials()
+        http = credentials.authorize(httplib2.Http())
+        service = discovery.build('drive', 'v3', http=http)
+        
+        local_timestamp = os.path.getmtime(self.sync_path + filename)
+        local_date = datetime.datetime.utcfromtimestamp(int(local_timestamp)).strftime('%Y-%m-%dT%H:%M:%S')
+        page_token = None
+
+        while True:
+            response = service.files().list(q="modifiedTime < '" + str(local_date) + "'"
+                                            + " and not trashed"
+                                            + " and mimeType = 'text/plain'"
+                                            + " and name = '" + filename + "'",
+                                            spaces='drive',
+                                            fields='nextPageToken, files(id, name, mimeType, modifiedTime)',
+                                            pageToken=page_token).execute()
+            for file in response.get('files', []):
+                file_metadata = {'name': filename, 'mimeType' : 'text/plain'}
+                media = MediaFileUpload(self.sync_path + filename, mimetype="text/plain")
+
+                update = service.files().update(fileId = file['id'], media_body=media).execute()
+
+                if update:
+                    print("Updated: " + filename)
+                else:
+                    print("Error updating file: " + filename)
+
+            page_token = response.get('nextPageToken', None)
+            if(page_token is None):
+                break
