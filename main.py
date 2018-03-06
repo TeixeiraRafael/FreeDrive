@@ -3,7 +3,8 @@ from FreeDriveClient import *
 
 def main():
     client = FreeDriveClient()
-    client.sync_file('testfile1.txt')
+    print(client.get_folders())
+    print(client.get_files())
 
 if __name__ == '__main__':
     main()

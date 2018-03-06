@@ -20,10 +20,15 @@ except ImportError:
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'config/client_secret.json'
 APPLICATION_NAME = 'Drive API Python Quickstart'
-
     
 class FreeDriveClient():
     sync_path = 'files/'
+
+    def __init__(self):
+        credentials = self.get_credentials()
+        http = credentials.authorize(httplib2.Http())
+        self.drive = discovery.build('drive', 'v3', http=http)
+
     
     def set_syncPath(self, path):
         self.sync_path = path
@@ -49,46 +54,55 @@ class FreeDriveClient():
             print('Storing credentials to ' + credential_path)
         return credentials
      
-    def list_files(self, n):
-        credentials = self.get_credentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('drive', 'v3', http=http)
+    def get_folders(self):
+        folders = []
+        page_token = None
+        while True:
+            response = self.drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", 
+                                                fields="nextPageToken, files(id)", 
+                                                pageToken=page_token).execute()
+            for file in response.get('files', []):
+                folders.append(file)
 
-        results = service.files().list(pageSize=n,fields="nextPageToken, files(name)").execute()
+            page_token = response.get('nextPageToken', None)
+            if(page_token is None):
+                break
+        return folders
+
+    def get_files(self):
+        files = []
+        page_token = None
+        while True:
+            response = self.drive.files().list(q="mimeType != 'application/vnd.google-apps.folder'", 
+                                                fields="nextPageToken, files(id)", 
+                                                pageToken=page_token).execute()
+            for file in response.get('files', []):
+                files.append(file)
+
+            page_token = response.get('nextPageToken', None)
+            if(page_token is None):
+                break
+        return files
+
+
+    def upload(self, filename):       
+        filepath = filename.split('/')
         
-        items = results.get('files', [])
-        if not items:
-            print('No files found.')
+        if(len(filepath) > 1):
+            folder = filepath[-2]
+            filename = filename[-1]
         else:
-            print('Files:')
-            for item in items:
-                print(item['name'].encode('utf-8'))
-    
-    def upload(self, filename):
-        credentials = self.get_credentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('drive', 'v3', http=http)
+            folder = "My Drive"
+            filename = filename[-1]
 
-        file_metadata = {'name': filename, 'mimeType' : 'text/plain'}
-        media = MediaFileUpload(self.sync_path + filename, mimetype="text/plain")
-        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        if file:
-            return True
-        else:
-            print("Error uploading file: " + filename)
-            return False
 
     def sync_file(self, filename):
-        credentials = self.get_credentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('drive', 'v3', http=http)
-        
         local_timestamp = os.path.getmtime(self.sync_path + filename)
         local_date = datetime.datetime.utcfromtimestamp(int(local_timestamp)).strftime('%Y-%m-%dT%H:%M:%S')
         page_token = None
 
         while True:
-            response = service.files().list(q="modifiedTime < '" + str(local_date) + "'"
+            response = self.drive.files().list(q="modifiedTime < '" + str(local_date) + "'"
                                             + " and not trashed"
                                             + " and mimeType = 'text/plain'"
                                             + " and name = '" + filename + "'",
@@ -96,10 +110,10 @@ class FreeDriveClient():
                                             fields='nextPageToken, files(id, name, mimeType, modifiedTime)',
                                             pageToken=page_token).execute()
             for file in response.get('files', []):
-                file_metadata = {'name': filename, 'mimeType' : 'text/plain'}
+                file_metadata = {'name': filename}
                 media = MediaFileUpload(self.sync_path + filename, mimetype="text/plain")
 
-                update = service.files().update(fileId = file['id'], media_body=media).execute()
+                update = self.drive.files().update(fileId = file['id'], media_body=media).execute()
 
                 if update:
                     print("Updated: " + filename)
@@ -109,3 +123,19 @@ class FreeDriveClient():
             page_token = response.get('nextPageToken', None)
             if(page_token is None):
                 break
+    
+    def browse(self):
+        dirList = os.listdir("./"+self.sync_path)
+        print(dirList)
+    
+    def get_parents(self, file):
+        parent = self.drive.files().get(fileId = file['id']).execute()
+        if file['parents']:
+            print(1)
+            get_parents(parent)
+        else:
+            return parent:
+
+
+    def build_tree(self):
+        pass
