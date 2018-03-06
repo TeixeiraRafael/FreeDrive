@@ -17,6 +17,8 @@ try:
 except ImportError:
     flags = None
 
+from Tree import *
+
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'config/client_secret.json'
 APPLICATION_NAME = 'Drive API Python Quickstart'
@@ -77,6 +79,7 @@ class FreeDriveClient():
                                                 fields="nextPageToken, files(id)", 
                                                 pageToken=page_token).execute()
             for file in response.get('files', []):
+                print(file['id'])
                 files.append(file)
 
             page_token = response.get('nextPageToken', None)
@@ -124,6 +127,16 @@ class FreeDriveClient():
             if(page_token is None):
                 break
     
+    def get_specific(self, fileId):
+        files = []
+        response = self.drive.files().list(q="fileId = '" + fileId + "'", fields="files(id, name, mimeType, parents)").execute()
+        
+        for file in response.get('files', []):
+            files.append(file)
+        
+        return files
+    
+    
     def browse(self):
         dirList = os.listdir("./"+self.sync_path)
         print(dirList)
@@ -134,8 +147,19 @@ class FreeDriveClient():
             print(1)
             get_parents(parent)
         else:
-            return parent:
-
+            return parent
 
     def build_tree(self):
-        pass
+        tree = Tree()
+        files = []
+        page_token = None
+        while True:
+            response = self.drive.files().list(fields="nextPageToken, files(id, name, mimeType, parents)", pageToken=page_token).execute()
+            for file in response.get('files', []):
+                tree.add(file)
+
+            page_token = response.get('nextPageToken', None)
+            if(page_token is None):
+                break
+        
+        tree.showTree()
