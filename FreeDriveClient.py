@@ -17,24 +17,18 @@ try:
 except ImportError:
     flags = None
 
-from Tree import *
+from mimetypes import MimeTypes
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'config/client_secret.json'
 APPLICATION_NAME = 'Drive API Python Quickstart'
     
 class FreeDriveClient():
-    sync_path = 'files/'
-
     def __init__(self):
         credentials = self.get_credentials()
         http = credentials.authorize(httplib2.Http())
         self.drive = discovery.build('drive', 'v3', http=http)
-
     
-    def set_syncPath(self, path):
-        self.sync_path = path
-
     def get_credentials(self):
         home_dir = os.path.expanduser('~')
         credential_dir = os.path.join(home_dir, '.credentials')
@@ -55,111 +49,26 @@ class FreeDriveClient():
                 credentials = tools.run(flow, store)
             print('Storing credentials to ' + credential_path)
         return credentials
-     
-    def get_folders(self):
-        folders = []
-        page_token = None
-        while True:
-            response = self.drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", 
-                                                fields="nextPageToken, files(id)", 
-                                                pageToken=page_token).execute()
-            for file in response.get('files', []):
-                folders.append(file)
-
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
-        return folders
-
-    def get_files(self):
-        files = []
-        page_token = None
-        while True:
-            response = self.drive.files().list(q="mimeType != 'application/vnd.google-apps.folder'", 
-                                                fields="nextPageToken, files(id)", 
-                                                pageToken=page_token).execute()
-            for file in response.get('files', []):
-                print(file['id'])
-                files.append(file)
-
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
-        return files
-
-
-    def upload(self, filename):       
-        filepath = filename.split('/')
-        
-        if(len(filepath) > 1):
-            folder = filepath[-2]
-            filename = filename[-1]
-        else:
-            folder = "My Drive"
-            filename = filename[-1]
-
-
-    def sync_file(self, filename):
-        local_timestamp = os.path.getmtime(self.sync_path + filename)
-        local_date = datetime.datetime.utcfromtimestamp(int(local_timestamp)).strftime('%Y-%m-%dT%H:%M:%S')
-        page_token = None
-
-        while True:
-            response = self.drive.files().list(q="modifiedTime < '" + str(local_date) + "'"
-                                            + " and not trashed"
-                                            + " and mimeType = 'text/plain'"
-                                            + " and name = '" + filename + "'",
-                                            spaces='drive',
-                                            fields='nextPageToken, files(id, name, mimeType, modifiedTime)',
-                                            pageToken=page_token).execute()
-            for file in response.get('files', []):
-                file_metadata = {'name': filename}
-                media = MediaFileUpload(self.sync_path + filename, mimetype="text/plain")
-
-                update = self.drive.files().update(fileId = file['id'], media_body=media).execute()
-
-                if update:
-                    print("Updated: " + filename)
-                else:
-                    print("Error updating file: " + filename)
-
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
     
-    def get_specific(self, fileId):
-        files = []
-        response = self.drive.files().list(q="fileId = '" + fileId + "'", fields="files(id, name, mimeType, parents)").execute()
-        
-        for file in response.get('files', []):
-            files.append(file)
-        
-        return files
-    
-    
-    def browse(self):
-        dirList = os.listdir("./"+self.sync_path)
-        print(dirList)
-    
-    def get_parents(self, file):
-        parent = self.drive.files().get(fileId = file['id']).execute()
-        if file['parents']:
-            print(1)
-            get_parents(parent)
-        else:
-            return parent
+    #Uploads a single file
+    def upload(self, path, parent_id=None):       
+        mime = MimeTypes()
+        file_metadata = {'name': os.path.basename(path)}
+        if parent_id:
+            file_metadata['parents'] = [parent_id]
+        try:
+            media = MediaFileUpload(path, mimetype=mime.guess_type(os.path.basename(path))[0], resumable=True)
+            file = self.drive.files().create(body=file_metadata, media_body=media, fields='id').execute()
+            return None
+        except IOError as ioe:
+            if (ioe.errno == 21):
+                file_metadata = {
+                    'name': path.split('/')[-1],
+                    'mimeType': 'application/vnd.google-apps.folder',
+                }
 
-    def build_tree(self):
-        tree = Tree()
-        files = []
-        page_token = None
-        while True:
-            response = self.drive.files().list(fields="nextPageToken, files(id, name, mimeType, parents)", pageToken=page_token).execute()
-            for file in response.get('files', []):
-                tree.add(file)
+                if parent_id:
+                    file_metadata['parent_id']
 
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
-        
-        tree.showTree()
+                file = self.drive.files().create(body=file_metadata, fields='id').execute() 
+                return file.get('id')
