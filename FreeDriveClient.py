@@ -9,6 +9,8 @@ from oauth2client import client
 from oauth2client import tools
 from oauth2client.file import Storage
 
+import googleapiclient
+
 import datetime
 
 try:
@@ -53,7 +55,8 @@ class FreeDriveClient():
     #Uploads a single file
     def upload(self, path, parent_id=None):       
         mime = MimeTypes()
-        file_metadata = {'name': os.path.basename(path)}
+        filename = path.split('/')[-1]
+        file_metadata = {'name': filename}
         if parent_id:
             file_metadata['parents'] = [parent_id]
         try:
@@ -62,13 +65,11 @@ class FreeDriveClient():
             return None
         except IOError as ioe:
             if (ioe.errno == 21):
-                file_metadata = {
-                    'name': path.split('/')[-1],
-                    'mimeType': 'application/vnd.google-apps.folder',
-                }
-
+                file_metadata = {'name': filename, 'mimeType': 'application/vnd.google-apps.folder'}
                 if parent_id:
-                    file_metadata['parent_id']
-
-                file = self.drive.files().create(body=file_metadata, fields='id').execute() 
+                    file_metadata['parents'] = [parent_id]
+                file = self.drive.files().create(body=file_metadata, fields='id').execute()
                 return file.get('id')
+        
+        except googleapiclient.errors.HttpError as err:
+            print("Error uploading " + path)
