@@ -1,7 +1,9 @@
 #coding: utf-8
 from __future__ import print_function
 import httplib2
+
 import os
+import sys
 
 from apiclient import discovery
 from apiclient.http import MediaFileUpload
@@ -9,7 +11,11 @@ from oauth2client import client
 from oauth2client import tools
 from oauth2client.file import Storage
 
+import googleapiclient
+
 import datetime
+import time
+
 
 try:
     import argparse
@@ -17,22 +23,18 @@ try:
 except ImportError:
     flags = None
 
+from mimetypes import MimeTypes
+
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'config/client_secret.json'
 APPLICATION_NAME = 'Drive API Python Quickstart'
     
 class FreeDriveClient():
-    sync_path = 'files/'
-
     def __init__(self):
         credentials = self.get_credentials()
         http = credentials.authorize(httplib2.Http())
         self.drive = discovery.build('drive', 'v3', http=http)
-
     
-    def set_syncPath(self, path):
-        self.sync_path = path
-
     def get_credentials(self):
         home_dir = os.path.expanduser('~')
         credential_dir = os.path.join(home_dir, '.credentials')
@@ -53,89 +55,61 @@ class FreeDriveClient():
                 credentials = tools.run(flow, store)
             print('Storing credentials to ' + credential_path)
         return credentials
-     
-    def get_folders(self):
-        folders = []
-        page_token = None
-        while True:
-            response = self.drive.files().list(q="mimeType = 'application/vnd.google-apps.folder'", 
-                                                fields="nextPageToken, files(id)", 
-                                                pageToken=page_token).execute()
-            for file in response.get('files', []):
-                folders.append(file)
-
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
-        return folders
-
-    def get_files(self):
-        files = []
-        page_token = None
-        while True:
-            response = self.drive.files().list(q="mimeType != 'application/vnd.google-apps.folder'", 
-                                                fields="nextPageToken, files(id)", 
-                                                pageToken=page_token).execute()
-            for file in response.get('files', []):
-                files.append(file)
-
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
-        return files
-
-
-    def upload(self, filename):       
-        filepath = filename.split('/')
+    
+    #Uploads a single file
+    def upload(self, path, parent_id=None):       
+        mime = MimeTypes()
+        filename = path.split('/')[-1]
+        file_metadata = {'name': filename}
+        if parent_id:
+            file_metadata['parents'] = [parent_id]
+        try:
+            media = MediaFileUpload(path, mimetype=mime.guess_type(os.path.basename(path))[0], resumable=True)
+            file = self.drive.files().create(body=file_metadata, media_body=media, fields='id').execute()
+            return None
+        except IOError as ioe:
+            if (ioe.errno == 21):
+                file_metadata = {'name': filename, 'mimeType': 'application/vnd.google-apps.folder'}
+                if parent_id:
+                    file_metadata['parents'] = [parent_id]
+                file = self.drive.files().create(body=file_metadata, fields='id').execute()
+                return file.get('id')
         
-        if(len(filepath) > 1):
-            folder = filepath[-2]
-            filename = filename[-1]
-        else:
-            folder = "My Drive"
-            filename = filename[-1]
-
-
-    def sync_file(self, filename):
-        local_timestamp = os.path.getmtime(self.sync_path + filename)
-        local_date = datetime.datetime.utcfromtimestamp(int(local_timestamp)).strftime('%Y-%m-%dT%H:%M:%S')
-        page_token = None
-
-        while True:
-            response = self.drive.files().list(q="modifiedTime < '" + str(local_date) + "'"
-                                            + " and not trashed"
-                                            + " and mimeType = 'text/plain'"
-                                            + " and name = '" + filename + "'",
-                                            spaces='drive',
-                                            fields='nextPageToken, files(id, name, mimeType, modifiedTime)',
-                                            pageToken=page_token).execute()
-            for file in response.get('files', []):
-                file_metadata = {'name': filename}
-                media = MediaFileUpload(self.sync_path + filename, mimetype="text/plain")
-
-                update = self.drive.files().update(fileId = file['id'], media_body=media).execute()
-
-                if update:
-                    print("Updated: " + filename)
-                else:
-                    print("Error updating file: " + filename)
-
-            page_token = response.get('nextPageToken', None)
-            if(page_token is None):
-                break
+        except googleapiclient.errors.HttpError as err:
+            print("\nError uploading:\t" + path + "\n")
     
-    def browse(self):
-        dirList = os.listdir("./"+self.sync_path)
-        print(dirList)
-    
-    def get_parents(self, file):
-        parent = self.drive.files().get(fileId = file['id']).execute()
-        if file['parents']:
-            print(1)
-            get_parents(parent)
-        else:
-            return parent:
+    def uploadFolder(self, folder):
+        backup_date = datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+        backup_name = "backup " + str(backup_date)
+        print("Creating backup folder:\t"+backup_name)
+        
+        file_metadata = {'name': backup_name, 'mimeType': 'application/vnd.google-apps.folder'}
+        file = self.drive.files().create(body=file_metadata, fields='id').execute()
+        
+        ids = {}
+        ids[backup_name] = file.get('id')
+        first_run = True
 
+        for root, sub, files in os.walk(folder):
+            if first_run:
+                par = backup_name
+            else:
+                par = os.path.dirname(root)
+            first_run = False
 
-    def build_tree(self):
-        pass
+            file_metadata = {
+                'name': os.path.basename(root),
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            if par in ids.keys():
+                file_metadata['parents'] = [ids[par]]
+            
+            print("Uploading:\t" + root)
+            file = self.drive.files().create(body=file_metadata, fields='id').execute()
+            
+            id = file.get('id')
+            ids[root] = id
+            
+            for f in files:
+                print("Uploading:\t"+root+'/'+f)
+                self.upload(root + '/' + f, id)
