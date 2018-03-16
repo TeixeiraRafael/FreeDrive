@@ -1,7 +1,9 @@
 #coding: utf-8
 from __future__ import print_function
 import httplib2
+
 import os
+import sys
 
 from apiclient import discovery
 from apiclient.http import MediaFileUpload
@@ -12,6 +14,8 @@ from oauth2client.file import Storage
 import googleapiclient
 
 import datetime
+import time
+
 
 try:
     import argparse
@@ -72,4 +76,40 @@ class FreeDriveClient():
                 return file.get('id')
         
         except googleapiclient.errors.HttpError as err:
-            print("Error uploading " + path)
+            print("\nError uploading:\t" + path + "\n")
+    
+    def uploadFolder(self, folder):
+        backup_date = datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+        backup_name = "backup " + str(backup_date)
+        print("Creating backup folder:\t"+backup_name)
+        
+        file_metadata = {'name': backup_name, 'mimeType': 'application/vnd.google-apps.folder'}
+        file = self.drive.files().create(body=file_metadata, fields='id').execute()
+        
+        ids = {}
+        ids[backup_name] = file.get('id')
+        first_run = True
+
+        for root, sub, files in os.walk(folder):
+            if first_run:
+                par = backup_name
+            else:
+                par = os.path.dirname(root)
+            first_run = False
+
+            file_metadata = {
+                'name': os.path.basename(root),
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            if par in ids.keys():
+                file_metadata['parents'] = [ids[par]]
+            
+            print("Uploading:\t" + root)
+            file = self.drive.files().create(body=file_metadata, fields='id').execute()
+            
+            id = file.get('id')
+            ids[root] = id
+            
+            for f in files:
+                print("Uploading:\t"+root+'/'+f)
+                self.upload(root + '/' + f, id)
