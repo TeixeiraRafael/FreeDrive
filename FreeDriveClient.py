@@ -74,7 +74,7 @@ class FreeDriveClient():
         backup_date = datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')
         backup_name = "backup " + str(backup_date)
         
-        log_file = open(os.path.dirname(folder) + "/backup.log", 'w')
+        log_file = open(os.path.dirname(folder) + "/backup.log", 'w+')
         log_file.write("Creating backup folder:\t"+backup_name + "\n")
         
         file_metadata = {'name': backup_name, 'mimeType': 'application/vnd.google-apps.folder'}
