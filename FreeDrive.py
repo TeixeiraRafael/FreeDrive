@@ -22,8 +22,7 @@ def main():
             #Uploads log file
             client.upload(os.path.dirname(path) + "/backup.log", backup_id)
             print("Done!")
-            
-
+        
         firstRun = False        
 
 

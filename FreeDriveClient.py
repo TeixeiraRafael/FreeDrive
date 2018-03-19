@@ -58,7 +58,7 @@ class FreeDriveClient():
         try:
             media = MediaFileUpload(path, mimetype=mime.guess_type(os.path.basename(path))[0], resumable=True)
             file = self.drive.files().create(body=file_metadata, media_body=media, fields='id').execute()
-            return None
+            return file.get('id')
         except IOError as ioe:
             if (ioe.errno == 21):
                 file_metadata = {'name': filename, 'mimeType': 'application/vnd.google-apps.folder'}
