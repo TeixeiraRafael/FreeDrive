@@ -4,11 +4,11 @@ import sys
 
 
 def main():
-    print("Google Drive backup tool started.\n")
-
     path = str(sys.argv[1])
+
     backup_interval = int(sys.argv[2])
     last_backup = datetime.datetime.now()
+    
     firstRun = True
     client = FreeDriveClient()
     
@@ -21,7 +21,6 @@ def main():
             print(os.path.dirname(path))
             #Uploads log file
             client.upload(os.path.dirname(path) + "/backup.log", backup_id)
-            print("Done!")
         
         firstRun = False        
 
