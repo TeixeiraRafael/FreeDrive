@@ -68,7 +68,7 @@ class FreeDriveClient():
                 return file.get('id')
         
         except googleapiclient.errors.HttpError as err:
-            print("\nError uploading:\t" + path + "\n")
+            return None
     
     def uploadFolder(self, folder):
         backup_date = datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')
@@ -101,13 +101,14 @@ class FreeDriveClient():
             
             log_file.write("Uploading:\t" + root + "\n")
             file = self.drive.files().create(body=file_metadata, fields='id').execute()
-            
             id = file.get('id')
             ids[root] = id
             
             for f in files:
                 log_file.write("Uploading:\t" + root + "/" + f + "\n")
-                self.upload(root + '/' + f, id)
+                up = self.upload(root + '/' + f, id)
+                if up == None:
+                    log_file.write("\nError uploading file:\t" + root + "/" + f + "\n")
         
         current_time = datetime.datetime.now()
         log_file.write("\nBackup successfully finished at " + current_time.strftime('%d-%m-%Y %H:%M:%S') + "\n")
