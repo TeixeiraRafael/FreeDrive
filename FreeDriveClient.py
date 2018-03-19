@@ -73,13 +73,16 @@ class FreeDriveClient():
     def uploadFolder(self, folder):
         backup_date = datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')
         backup_name = "backup " + str(backup_date)
-        print("Creating backup folder:\t"+backup_name)
+        
+        log_file = open(os.path.dirname(folder) + "/backup.log", 'w')
+        log_file.write("Creating backup folder:\t"+backup_name + "\n")
         
         file_metadata = {'name': backup_name, 'mimeType': 'application/vnd.google-apps.folder'}
         file = self.drive.files().create(body=file_metadata, fields='id').execute()
         
         ids = {}
         ids[backup_name] = file.get('id')
+        
         first_run = True
 
         for root, sub, files in os.walk(folder):
@@ -96,12 +99,17 @@ class FreeDriveClient():
             if par in ids.keys():
                 file_metadata['parents'] = [ids[par]]
             
-            print("Uploading:\t" + root)
+            log_file.write("Uploading:\t" + root + "\n")
             file = self.drive.files().create(body=file_metadata, fields='id').execute()
             
             id = file.get('id')
             ids[root] = id
             
             for f in files:
-                print("Uploading:\t"+root+'/'+f)
+                log_file.write("Uploading:\t" + root + "/" + f + "\n")
                 self.upload(root + '/' + f, id)
+        
+        current_time = datetime.datetime.now()
+        log_file.write("\nBackup successfully finished at " + current_time.strftime('%d-%m-%Y %H:%M:%S') + "\n")
+        
+        return ids[backup_name]

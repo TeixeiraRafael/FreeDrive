@@ -10,16 +10,20 @@ def main():
     backup_interval = int(sys.argv[2])
     last_backup = datetime.datetime.now()
     firstRun = True
+    client = FreeDriveClient()
     
     while 1:
         current_time = datetime.datetime.now()
         diff = current_time - last_backup
         if diff.days >= backup_interval or firstRun:
-            client = FreeDriveClient()
-            client.uploadFolder(path)
+            backup_id = client.uploadFolder(path)
             last_backup = datetime.datetime.now()
-            print("\nBackup successfully finished at " + last_backup.strftime('%d-%m-%Y %H:%M:%S') + "\n")
-        
+            print(os.path.dirname(path))
+            #Uploads log file
+            client.upload(os.path.dirname(path) + "/backup.log", backup_id)
+            print("Done!")
+            
+
         firstRun = False        
 
 
