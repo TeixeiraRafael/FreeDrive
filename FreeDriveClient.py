@@ -108,7 +108,7 @@ class FreeDriveClient():
                 log_file.write("Uploading:\t" + root + "/" + f + "\n")
                 up = self.upload(root + '/' + f, id)
                 if up == None:
-                    log_file.write("\nError uploading file:\t" + root + "/" + f + "\n")
+                    log_file.write("\nError uploading file:\t" + root + "/" + f + "\n\n")
         
         current_time = datetime.datetime.now()
         log_file.write("\nBackup successfully finished at " + current_time.strftime('%d-%m-%Y %H:%M:%S') + "\n")

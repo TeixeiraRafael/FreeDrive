@@ -18,7 +18,7 @@ def main():
         if diff.days >= backup_interval or firstRun:
             backup_id = client.uploadFolder(path)
             last_backup = datetime.datetime.now()
-            print(os.path.dirname(path))
+            
             #Uploads log file
             client.upload(os.path.dirname(path) + "/backup.log", backup_id)
         
