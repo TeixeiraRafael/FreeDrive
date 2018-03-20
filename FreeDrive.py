@@ -9,7 +9,7 @@ def main():
     backup_interval = int(sys.argv[2])
     last_backup = datetime.datetime.now()
     
-    firstRun = True
+    firstRun = int(sys.argv[3])
     client = FreeDriveClient()
     
     while 1:
