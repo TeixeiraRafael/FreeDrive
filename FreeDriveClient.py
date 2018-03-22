@@ -98,10 +98,10 @@ class FreeDriveClient():
             }
             if par in ids.keys():
                 file_metadata['parents'] = [ids[par]]
-            
-            log_file.write("Uploading:\t" + root + "\n")
+                        
             file = self.drive.files().create(body=file_metadata, fields='id').execute()
             id = file.get('id')
+            log_file.write("Uploaded:\t" + root + "\n")
             ids[root] = id
             
             for f in files:
